@@ -11,8 +11,6 @@
 
   <style>
     :root{
-      --scale: 0.5;
-
       --panel-border: #e5e7eb;
       --text: #111827;
       --muted: #6b7280;
@@ -33,62 +31,48 @@
     body{
       margin:0;
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: transparent; /* removed background */
+      background: transparent;
     }
 
-    /* Wrapper fills iframe; inner is scaled down to 50% */
     .wrap{
       min-height: 100%;
       display:flex;
       justify-content:center;
       align-items:flex-start;
-      padding: 0; /* remove outer padding so it’s tight */
+      padding: 0;
       box-sizing:border-box;
     }
 
-    .scaled{
-      transform: scale(var(--scale));
-      transform-origin: top center;
-      /* IMPORTANT: counteract scaling so it still fits the iframe width */
-      width: calc(100% / var(--scale));
-      display:flex;
-      justify-content:center;
-    }
-
-    /* Outer card becomes transparent (no background, no border, no shadow) */
-    .card{
+    /* This is the key: let the component know its own width */
+    .widget{
       width: min(100%, 720px);
-      background: transparent;
-      border: none;
-      box-shadow: none;
-      padding: 24px;
+      container-type: inline-size; /* enables cqi units inside */
+      padding: clamp(6px, 2cqi, 16px);
       box-sizing: border-box;
-
-      display:flex;
-      flex-direction: column;
-      gap: 16px;
     }
 
+    /* Everything below scales with the widget width via cqi (1% of container inline size) */
     .header{
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap: 12px;
+      gap: clamp(8px, 2cqi, 12px);
+      margin-bottom: clamp(8px, 3cqi, 16px);
     }
 
     .title{
       margin:0;
       font-weight: 600;
       color: var(--text);
-      font-size: 16px;
+      font-size: clamp(11px, 3.2cqi, 16px);
       line-height: 1.2;
     }
 
     .live{
       display:flex;
       align-items:center;
-      gap: 8px;
-      padding: 6px 12px;
+      gap: clamp(6px, 1.6cqi, 8px);
+      padding: clamp(3px, 1.2cqi, 6px) clamp(8px, 2.6cqi, 12px);
       background: var(--green-50);
       border-radius: 999px;
       user-select:none;
@@ -96,8 +80,8 @@
     }
 
     .dot{
-      width: 6px;
-      height: 6px;
+      width: clamp(4px, 1.2cqi, 6px);
+      height: clamp(4px, 1.2cqi, 6px);
       background: var(--green-500);
       border-radius: 999px;
       animation: pulse 1.2s ease-in-out infinite;
@@ -109,39 +93,40 @@
     }
 
     .live span{
-      font-size: 13px;
+      font-size: clamp(9px, 2.4cqi, 13px);
       font-weight: 500;
       color: var(--green-700);
     }
 
     .grid{
       display:grid;
-      gap: 12px;
+      gap: clamp(8px, 2.2cqi, 12px);
       grid-template-columns: 1fr;
       align-content: start;
     }
 
-    @media (min-width: 640px){
+    /* When the embed is wide enough, go 2 columns (reduces height) */
+    @container (min-width: 560px){
       .grid{ grid-template-columns: 1fr 1fr; }
     }
 
     .panel{
       border-radius: var(--r-panel);
-      padding: 20px;
+      padding: clamp(10px, 3.6cqi, 20px);
       box-sizing: border-box;
       display:flex;
       flex-direction: column;
       justify-content: center;
-      min-height: 140px;
+      min-height: clamp(86px, 16cqi, 140px);
     }
 
     .panel.local{
-      background: transparent;                 /* no solid bg */
+      background: transparent;
       border: 1px solid var(--panel-border);
     }
 
     .panel.korea{
-      background: var(--blue-50-50);           /* keep subtle tint */
+      background: var(--blue-50-50);
       border: 1px solid var(--blue-100-50);
     }
 
@@ -149,29 +134,29 @@
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: clamp(8px, 2cqi, 10px);
+      margin-bottom: clamp(8px, 2.6cqi, 12px);
     }
 
     .label{
-      font-size: 12px;
+      font-size: clamp(8px, 2cqi, 12px);
       font-weight: 500;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      margin: 0 0 12px 0;
+      margin: 0 0 clamp(8px, 2.6cqi, 12px) 0;
     }
 
     .time{
-      margin: 0 0 8px 0;
-      font-size: 20px;
+      margin: 0 0 clamp(6px, 1.8cqi, 8px) 0;
+      font-size: clamp(12px, 4.2cqi, 20px);
       font-weight: 600;
       color: var(--text);
       line-height: 1.2;
     }
 
     .meta{
-      font-size: 13px;
+      font-size: clamp(9px, 2.4cqi, 13px);
       color: var(--muted);
       line-height: 1.25;
       word-break: break-word;
@@ -179,10 +164,10 @@
     }
 
     .kst{
-      padding: 4px 10px;
+      padding: clamp(2px, 1cqi, 4px) clamp(6px, 2cqi, 10px);
       background: var(--blue-100);
       border-radius: 999px;
-      font-size: 11px;
+      font-size: clamp(8px, 1.8cqi, 11px);
       font-weight: 600;
       color: var(--blue-700);
       white-space: nowrap;
@@ -193,30 +178,28 @@
 
 <body>
   <div class="wrap">
-    <div class="scaled">
-      <div class="card" role="group" aria-label="Time widget">
-        <div class="header">
-          <h1 class="title">Time</h1>
-          <div class="live" aria-label="Live indicator">
-            <div class="dot" aria-hidden="true"></div>
-            <span>Live</span>
-          </div>
+    <div class="widget" role="group" aria-label="Time widget">
+      <div class="header">
+        <h1 class="title">Time</h1>
+        <div class="live" aria-label="Live indicator">
+          <div class="dot" aria-hidden="true"></div>
+          <span>Live</span>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="panel local">
+          <div class="label">Your local time (by IP)</div>
+          <div id="localTime" class="time">—</div>
+          <div id="localMeta" class="meta">—</div>
         </div>
 
-        <div class="grid">
-          <div class="panel local">
-            <div class="label">Your local time (by IP)</div>
-            <div id="localTime" class="time">—</div>
-            <div id="localMeta" class="meta">—</div>
+        <div class="panel korea">
+          <div class="k-header">
+            <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
+            <div class="kst">KST</div>
           </div>
-
-          <div class="panel korea">
-            <div class="k-header">
-              <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
-              <div class="kst">KST</div>
-            </div>
-            <div id="krTime" class="time" style="margin:0;">—</div>
-          </div>
+          <div id="krTime" class="time" style="margin:0;">—</div>
         </div>
       </div>
     </div>
