@@ -5,19 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Time Widget</title>
 
-  <!-- Inter (matches your design bundle) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
   <style>
     :root{
-      --bg: #f9fafb;            /* gray-50 */
       --card: #ffffff;
-      --border: #f3f4f6;        /* gray-100 */
-      --panel-border: #e5e7eb;  /* gray-200 */
-      --text: #111827;          /* gray-900 */
-      --muted: #6b7280;         /* gray-500 */
+      --border: #f3f4f6;
+      --panel-border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
       --shadow: 0 2px 12px rgba(0,0,0,0.08);
       --r-card: 14px;
       --r-panel: 12px;
@@ -26,8 +24,8 @@
       --green-500: #22c55e;
       --green-700: #15803d;
 
-      --blue-50-50: rgba(239, 246, 255, 0.50);    /* blue-50 / 50% */
-      --blue-100-50: rgba(219, 234, 254, 0.50);   /* blue-100 / 50% */
+      --blue-50-50: rgba(239, 246, 255, 0.50);
+      --blue-100-50: rgba(219, 234, 254, 0.50);
       --blue-100: #dbeafe;
       --blue-700: #1d4ed8;
     }
@@ -36,50 +34,60 @@
     body{
       margin:0;
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: var(--bg);
-      padding: 24px; /* p-6 */
-      box-sizing: border-box;
+      background: transparent; /* best for Notion */
     }
 
-    /* Nice for Notion embeds: centered, but not forced full-screen */
+    /* Container fills iframe height; centers without forcing fixed height */
     .wrap{
+      min-height: 100%;
+      padding: clamp(8px, 2vw, 18px);
+      box-sizing: border-box;
       display:flex;
-      justify-content:center;
-      align-items:flex-start;
-      min-height: 0;
+      align-items: stretch;
+      justify-content: center;
     }
 
     .card{
-      width: 420px;
-      max-width: 100%;
+      width: min(100%, 720px);
+      /* Height responsiveness:
+         - min-height scales so it looks “right” in short embeds
+         - but it can grow with content (no fixed height)
+      */
+      min-height: clamp(220px, 28vh, 340px);
+
       background: var(--card);
+      border: 1px solid var(--border);
       border-radius: var(--r-card);
       box-shadow: var(--shadow);
-      border: 1px solid var(--border);
-      padding: 24px; /* p-6 */
+
+      padding: clamp(14px, 2.2vw, 24px);
       box-sizing: border-box;
+
+      display:flex;
+      flex-direction: column;
+      gap: clamp(10px, 1.8vw, 16px);
     }
 
     .header{
       display:flex;
       align-items:center;
       justify-content:space-between;
-      margin-bottom: 24px; /* mb-6 */
       gap: 12px;
     }
 
     .title{
-      font-size: 15px;
-      font-weight: 600; /* semibold */
+      margin:0;
+      font-weight: 600;
       color: var(--text);
-      margin: 0;
+      font-size: clamp(14px, 0.6vw + 12px, 16px);
+      line-height: 1.2;
     }
 
     .live{
       display:flex;
       align-items:center;
       gap: 8px;
-      padding: 6px 12px; /* px-3 py-1.5 */
+      padding: clamp(4px, 0.6vw, 6px) clamp(10px, 1.2vw, 12px);
       background: var(--green-50);
       border-radius: 999px;
       user-select:none;
@@ -87,8 +95,8 @@
     }
 
     .dot{
-      width: 6px; /* w-1.5 */
-      height: 6px; /* h-1.5 */
+      width: 6px;
+      height: 6px;
       background: var(--green-500);
       border-radius: 999px;
       animation: pulse 1.2s ease-in-out infinite;
@@ -100,21 +108,37 @@
     }
 
     .live span{
-      font-size: 13px;
+      font-size: clamp(11px, 0.4vw + 10px, 13px);
       font-weight: 500;
       color: var(--green-700);
     }
 
+    /* Panels area becomes 2 columns when wide -> reduces overall height */
+    .grid{
+      display:grid;
+      gap: clamp(10px, 1.6vw, 12px);
+      grid-template-columns: 1fr;
+      align-content: start;
+      flex: 1; /* lets panels take remaining height without forcing */
+    }
+
+    @media (min-width: 640px){
+      .grid{ grid-template-columns: 1fr 1fr; }
+    }
+
     .panel{
       border-radius: var(--r-panel);
-      padding: 20px; /* p-5 */
+      padding: clamp(14px, 2vw, 20px);
       box-sizing: border-box;
+      display:flex;
+      flex-direction: column;
+      justify-content: center; /* makes it look nice if card is taller */
+      min-height: clamp(96px, 14vh, 150px); /* height scales per panel */
     }
 
     .panel.local{
       background: #fff;
       border: 1px solid var(--panel-border);
-      margin-bottom: 12px; /* mb-3 */
     }
 
     .panel.korea{
@@ -122,52 +146,49 @@
       border: 1px solid var(--blue-100-50);
     }
 
-    .label{
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.06em; /* tracking-wide */
-      margin-bottom: 12px; /* mb-3 */
-    }
-
-    .time{
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text);
-      line-height: 1.2;
-      margin: 0 0 8px 0; /* mb-2 */
-    }
-
-    .meta{
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.25;
-      word-break: break-word;
-    }
-
     .k-header{
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap: 12px;
-      margin-bottom: 12px; /* mb-3 */
+      gap: 10px;
+      margin-bottom: clamp(10px, 1.4vw, 12px);
+    }
+
+    .label{
+      font-size: clamp(10px, 0.35vw + 9px, 12px);
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 0 0 clamp(10px, 1.4vw, 12px) 0;
+    }
+
+    .time{
+      margin: 0 0 8px 0;
+      font-size: clamp(16px, 0.9vw + 14px, 20px);
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .meta{
+      font-size: clamp(11px, 0.45vw + 10px, 13px);
+      color: var(--muted);
+      line-height: 1.25;
+      word-break: break-word;
+      margin: 0;
     }
 
     .kst{
-      padding: 4px 10px; /* px-2.5 py-1 */
+      padding: 4px 10px;
       background: var(--blue-100);
       border-radius: 999px;
-      font-size: 11px;
+      font-size: clamp(10px, 0.3vw + 9px, 11px);
       font-weight: 600;
       color: var(--blue-700);
       white-space: nowrap;
+      flex: 0 0 auto;
     }
-
-    /* If you want transparent background for Notion, uncomment:
-       body { background: transparent; padding: 0; }
-       .wrap { justify-content:flex-start; }
-    */
   </style>
 </head>
 
@@ -182,18 +203,20 @@
         </div>
       </div>
 
-      <div class="panel local">
-        <div class="label">Your local time (by IP)</div>
-        <div id="localTime" class="time">—</div>
-        <div id="localMeta" class="meta">—</div>
-      </div>
-
-      <div class="panel korea">
-        <div class="k-header">
-          <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
-          <div class="kst">KST</div>
+      <div class="grid">
+        <div class="panel local">
+          <div class="label">Your local time (by IP)</div>
+          <div id="localTime" class="time">—</div>
+          <div id="localMeta" class="meta">—</div>
         </div>
-        <div id="krTime" class="time" style="margin:0;">—</div>
+
+        <div class="panel korea">
+          <div class="k-header">
+            <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
+            <div class="kst">KST</div>
+          </div>
+          <div id="krTime" class="time" style="margin:0;">—</div>
+        </div>
       </div>
     </div>
   </div>
@@ -228,10 +251,7 @@
         const parts = [];
         if (city && country) parts.push(`${city}, ${country}`);
         else if (country) parts.push(country);
-
         if (ip) parts.push(`IP: ${ip}`);
-
-        // If we have nothing (API blocked), still show timezone so it’s not blank.
         if (!parts.length) parts.push(tzLocal);
 
         elLocalMeta.textContent = parts.join(" • ");
@@ -239,7 +259,6 @@
 
       async function loadIpData() {
         try {
-          // ipapi.co returns: ip, city, country_name, timezone
           const res = await fetch("https://ipapi.co/json/", { cache: "no-store" });
           if (!res.ok) throw new Error("ip lookup failed");
           const data = await res.json();
@@ -249,7 +268,7 @@
           country = data.country_name || null;
           tzLocal = data.timezone || tzLocal;
         } catch (_) {
-          // Quiet fallback: keep browser tzLocal + no city/ip
+          // silent fallback
         }
       }
 
