@@ -4,122 +4,260 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Time Widget</title>
+
+  <!-- Inter (matches your design bundle) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
   <style>
-    :root { color-scheme: light dark; }
-    body { margin: 0; padding: 12px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    .card {
-      width: 100%;
-      max-width: 420px;
-      border: 1px solid rgba(0,0,0,.12);
-      border-radius: 14px;
-      padding: 12px 14px;
-      box-shadow: 0 6px 18px rgba(0,0,0,.06);
-      background: rgba(255,255,255,.6);
-      backdrop-filter: blur(6px);
+    :root{
+      --bg: #f9fafb;            /* gray-50 */
+      --card: #ffffff;
+      --border: #f3f4f6;        /* gray-100 */
+      --panel-border: #e5e7eb;  /* gray-200 */
+      --text: #111827;          /* gray-900 */
+      --muted: #6b7280;         /* gray-500 */
+      --shadow: 0 2px 12px rgba(0,0,0,0.08);
+      --r-card: 14px;
+      --r-panel: 12px;
+
+      --green-50: #f0fdf4;
+      --green-500: #22c55e;
+      --green-700: #15803d;
+
+      --blue-50-50: rgba(239, 246, 255, 0.50);    /* blue-50 / 50% */
+      --blue-100-50: rgba(219, 234, 254, 0.50);   /* blue-100 / 50% */
+      --blue-100: #dbeafe;
+      --blue-700: #1d4ed8;
     }
-    .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-    .title { font-weight: 800; }
-    .status { font-size: 12px; opacity:.7; }
-    .grid { margin-top: 10px; display:grid; gap:10px; }
-    .panel { padding:10px; border-radius:12px; background: rgba(0,0,0,.05); }
-    .label { font-size:12px; opacity:.7; }
-    .time { font-size:18px; font-weight:800; margin-top:2px; }
-    .meta { font-size:12px; opacity:.75; margin-top:4px; line-height:1.2; word-break: break-word; }
-    .foot { margin-top: 10px; font-size: 11px; opacity:.6; line-height:1.25; }
+
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      padding: 24px; /* p-6 */
+      box-sizing: border-box;
+    }
+
+    /* Nice for Notion embeds: centered, but not forced full-screen */
+    .wrap{
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      min-height: 0;
+    }
+
+    .card{
+      width: 420px;
+      max-width: 100%;
+      background: var(--card);
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      padding: 24px; /* p-6 */
+      box-sizing: border-box;
+    }
+
+    .header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom: 24px; /* mb-6 */
+      gap: 12px;
+    }
+
+    .title{
+      font-size: 15px;
+      font-weight: 600; /* semibold */
+      color: var(--text);
+      margin: 0;
+    }
+
+    .live{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      padding: 6px 12px; /* px-3 py-1.5 */
+      background: var(--green-50);
+      border-radius: 999px;
+      user-select:none;
+      white-space:nowrap;
+    }
+
+    .dot{
+      width: 6px; /* w-1.5 */
+      height: 6px; /* h-1.5 */
+      background: var(--green-500);
+      border-radius: 999px;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse{
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.35); opacity: .55; }
+    }
+
+    .live span{
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--green-700);
+    }
+
+    .panel{
+      border-radius: var(--r-panel);
+      padding: 20px; /* p-5 */
+      box-sizing: border-box;
+    }
+
+    .panel.local{
+      background: #fff;
+      border: 1px solid var(--panel-border);
+      margin-bottom: 12px; /* mb-3 */
+    }
+
+    .panel.korea{
+      background: var(--blue-50-50);
+      border: 1px solid var(--blue-100-50);
+    }
+
+    .label{
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em; /* tracking-wide */
+      margin-bottom: 12px; /* mb-3 */
+    }
+
+    .time{
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+      margin: 0 0 8px 0; /* mb-2 */
+    }
+
+    .meta{
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.25;
+      word-break: break-word;
+    }
+
+    .k-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      margin-bottom: 12px; /* mb-3 */
+    }
+
+    .kst{
+      padding: 4px 10px; /* px-2.5 py-1 */
+      background: var(--blue-100);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--blue-700);
+      white-space: nowrap;
+    }
+
+    /* If you want transparent background for Notion, uncomment:
+       body { background: transparent; padding: 0; }
+       .wrap { justify-content:flex-start; }
+    */
   </style>
 </head>
+
 <body>
-  <div class="card">
-    <div class="top">
-      <div class="title">Time</div>
-      <div id="tw-status" class="status">Loading…</div>
-    </div>
+  <div class="wrap">
+    <div class="card" role="group" aria-label="Time widget">
+      <div class="header">
+        <h1 class="title">Time</h1>
+        <div class="live" aria-label="Live indicator">
+          <div class="dot" aria-hidden="true"></div>
+          <span>Live</span>
+        </div>
+      </div>
 
-    <div class="grid">
-      <div class="panel">
+      <div class="panel local">
         <div class="label">Your local time (by IP)</div>
-        <div id="tw-local-time" class="time">—</div>
-        <div id="tw-local-meta" class="meta">—</div>
+        <div id="localTime" class="time">—</div>
+        <div id="localMeta" class="meta">—</div>
       </div>
 
-      <div class="panel">
-        <div class="label">Korea time (Asia/Seoul)</div>
-        <div id="tw-kr-time" class="time">—</div>
-        <div class="meta">KST</div>
+      <div class="panel korea">
+        <div class="k-header">
+          <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
+          <div class="kst">KST</div>
+        </div>
+        <div id="krTime" class="time" style="margin:0;">—</div>
       </div>
-    </div>
-
-    <div class="foot">
-      Uses IP geolocation (may be inaccurate with VPN/mobile networks). Falls back to browser timezone if lookup fails.
     </div>
   </div>
 
   <script>
-  (() => {
-    const els = {
-      status: document.getElementById("tw-status"),
-      localTime: document.getElementById("tw-local-time"),
-      localMeta: document.getElementById("tw-local-meta"),
-      krTime: document.getElementById("tw-kr-time"),
-    };
+    (() => {
+      const elLocalTime = document.getElementById("localTime");
+      const elLocalMeta = document.getElementById("localMeta");
+      const elKrTime = document.getElementById("krTime");
 
-    let ip = null;
-    let tzLocal = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    let place = "Browser timezone fallback";
+      let tzLocal = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      let city = null, country = null, ip = null;
 
-    const fmt = (timeZone) =>
-      new Intl.DateTimeFormat(undefined, {
-        timeZone,
-        weekday: "short",
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      });
+      const fmt = (timeZone) =>
+        new Intl.DateTimeFormat("en-US", {
+          weekday: "short",
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+          timeZone,
+        });
 
-    function tick() {
-      const now = new Date();
-      els.localTime.textContent = fmt(tzLocal).format(now);
-      els.krTime.textContent = fmt("Asia/Seoul").format(now);
+      function render() {
+        const now = new Date();
+        elLocalTime.textContent = fmt(tzLocal).format(now);
+        elKrTime.textContent = fmt("Asia/Seoul").format(now);
 
-      const metaParts = [];
-      metaParts.push(tzLocal);
-      if (ip) metaParts.push(`IP: ${ip}`);
-      if (place) metaParts.push(place);
-      els.localMeta.textContent = metaParts.join(" • ");
-    }
+        const parts = [];
+        if (city && country) parts.push(`${city}, ${country}`);
+        else if (country) parts.push(country);
 
-    async function loadIpTimezone() {
-      els.status.textContent = "Detecting timezone…";
-      try {
-        // IP → timezone lookup (3rd-party)
-        const res = await fetch("https://ipapi.co/json/", { cache: "no-store" });
-        if (!res.ok) throw new Error(`IP lookup failed: ${res.status}`);
-        const data = await res.json();
+        if (ip) parts.push(`IP: ${ip}`);
 
-        ip = data.ip || null;
-        tzLocal = data.timezone || tzLocal;
+        // If we have nothing (API blocked), still show timezone so it’s not blank.
+        if (!parts.length) parts.push(tzLocal);
 
-        const city = data.city || null;
-        const region = data.region || null;
-        const country = data.country_name || null;
-        place = [city, region, country].filter(Boolean).join(", ") || "IP-based location";
-
-        els.status.textContent = "Live";
-      } catch (e) {
-        els.status.textContent = "Live (fallback)";
-        place = "Browser timezone fallback";
+        elLocalMeta.textContent = parts.join(" • ");
       }
-    }
 
-    loadIpTimezone().finally(() => {
-      tick();
-      setInterval(tick, 1000);
-    });
-  })();
+      async function loadIpData() {
+        try {
+          // ipapi.co returns: ip, city, country_name, timezone
+          const res = await fetch("https://ipapi.co/json/", { cache: "no-store" });
+          if (!res.ok) throw new Error("ip lookup failed");
+          const data = await res.json();
+
+          ip = data.ip || null;
+          city = data.city || null;
+          country = data.country_name || null;
+          tzLocal = data.timezone || tzLocal;
+        } catch (_) {
+          // Quiet fallback: keep browser tzLocal + no city/ip
+        }
+      }
+
+      loadIpData().finally(() => {
+        render();
+        setInterval(render, 1000);
+      });
+    })();
   </script>
 </body>
 </html>
