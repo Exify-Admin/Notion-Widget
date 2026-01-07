@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Time Widget</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; padding: 12px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      border: 1px solid rgba(0,0,0,.12);
+      border-radius: 14px;
+      padding: 12px 14px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.06);
+      background: rgba(255,255,255,.6);
+      backdrop-filter: blur(6px);
+    }
+    .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .title { font-weight: 800; }
+    .status { font-size: 12px; opacity:.7; }
+    .grid { margin-top: 10px; display:grid; gap:10px; }
+    .panel { padding:10px; border-radius:12px; background: rgba(0,0,0,.05); }
+    .label { font-size:12px; opacity:.7; }
+    .time { font-size:18px; font-weight:800; margin-top:2px; }
+    .meta { font-size:12px; opacity:.75; margin-top:4px; line-height:1.2; word-break: break-word; }
+    .foot { margin-top: 10px; font-size: 11px; opacity:.6; line-height:1.25; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="top">
+      <div class="title">Time</div>
+      <div id="tw-status" class="status">Loading…</div>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <div class="label">Your local time (by IP)</div>
+        <div id="tw-local-time" class="time">—</div>
+        <div id="tw-local-meta" class="meta">—</div>
+      </div>
+
+      <div class="panel">
+        <div class="label">Korea time (Asia/Seoul)</div>
+        <div id="tw-kr-time" class="time">—</div>
+        <div class="meta">KST</div>
+      </div>
+    </div>
+
+    <div class="foot">
+      Uses IP geolocation (may be inaccurate with VPN/mobile networks). Falls back to browser timezone if lookup fails.
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    const els = {
+      status: document.getElementById("tw-status"),
+      localTime: document.getElementById("tw-local-time"),
+      localMeta: document.getElementById("tw-local-meta"),
+      krTime: document.getElementById("tw-kr-time"),
+    };
+
+    let ip = null;
+    let tzLocal = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    let place = "Browser timezone fallback";
+
+    const fmt = (timeZone) =>
+      new Intl.DateTimeFormat(undefined, {
+        timeZone,
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      });
+
+    function tick() {
+      const now = new Date();
+      els.localTime.textContent = fmt(tzLocal).format(now);
+      els.krTime.textContent = fmt("Asia/Seoul").format(now);
+
+      const metaParts = [];
+      metaParts.push(tzLocal);
+      if (ip) metaParts.push(`IP: ${ip}`);
+      if (place) metaParts.push(place);
+      els.localMeta.textContent = metaParts.join(" • ");
+    }
+
+    async function loadIpTimezone() {
+      els.status.textContent = "Detecting timezone…";
+      try {
+        // IP → timezone lookup (3rd-party)
+        const res = await fetch("https://ipapi.co/json/", { cache: "no-store" });
+        if (!res.ok) throw new Error(`IP lookup failed: ${res.status}`);
+        const data = await res.json();
+
+        ip = data.ip || null;
+        tzLocal = data.timezone || tzLocal;
+
+        const city = data.city || null;
+        const region = data.region || null;
+        const country = data.country_name || null;
+        place = [city, region, country].filter(Boolean).join(", ") || "IP-based location";
+
+        els.status.textContent = "Live";
+      } catch (e) {
+        els.status.textContent = "Live (fallback)";
+        place = "Browser timezone fallback";
+      }
+    }
+
+    loadIpTimezone().finally(() => {
+      tick();
+      setInterval(tick, 1000);
+    });
+  })();
+  </script>
+</body>
+</html>
