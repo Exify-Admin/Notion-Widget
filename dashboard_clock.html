@@ -11,14 +11,11 @@
 
   <style>
     :root{
-      --card: #ffffff;
-      --border: #f3f4f6;
+      --scale: 0.5;
+
       --panel-border: #e5e7eb;
       --text: #111827;
       --muted: #6b7280;
-      --shadow: 0 2px 12px rgba(0,0,0,0.08);
-      --r-card: 14px;
-      --r-panel: 12px;
 
       --green-50: #f0fdf4;
       --green-500: #22c55e;
@@ -28,44 +25,48 @@
       --blue-100-50: rgba(219, 234, 254, 0.50);
       --blue-100: #dbeafe;
       --blue-700: #1d4ed8;
+
+      --r-panel: 12px;
     }
 
     html, body { height: 100%; }
     body{
       margin:0;
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: transparent; /* best for Notion */
+      background: transparent; /* removed background */
     }
 
-    /* Container fills iframe height; centers without forcing fixed height */
+    /* Wrapper fills iframe; inner is scaled down to 50% */
     .wrap{
       min-height: 100%;
-      padding: clamp(8px, 2vw, 18px);
-      box-sizing: border-box;
       display:flex;
-      align-items: stretch;
-      justify-content: center;
+      justify-content:center;
+      align-items:flex-start;
+      padding: 0; /* remove outer padding so it’s tight */
+      box-sizing:border-box;
     }
 
+    .scaled{
+      transform: scale(var(--scale));
+      transform-origin: top center;
+      /* IMPORTANT: counteract scaling so it still fits the iframe width */
+      width: calc(100% / var(--scale));
+      display:flex;
+      justify-content:center;
+    }
+
+    /* Outer card becomes transparent (no background, no border, no shadow) */
     .card{
       width: min(100%, 720px);
-      /* Height responsiveness:
-         - min-height scales so it looks “right” in short embeds
-         - but it can grow with content (no fixed height)
-      */
-      min-height: clamp(220px, 28vh, 340px);
-
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--r-card);
-      box-shadow: var(--shadow);
-
-      padding: clamp(14px, 2.2vw, 24px);
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 24px;
       box-sizing: border-box;
 
       display:flex;
       flex-direction: column;
-      gap: clamp(10px, 1.8vw, 16px);
+      gap: 16px;
     }
 
     .header{
@@ -79,7 +80,7 @@
       margin:0;
       font-weight: 600;
       color: var(--text);
-      font-size: clamp(14px, 0.6vw + 12px, 16px);
+      font-size: 16px;
       line-height: 1.2;
     }
 
@@ -87,7 +88,7 @@
       display:flex;
       align-items:center;
       gap: 8px;
-      padding: clamp(4px, 0.6vw, 6px) clamp(10px, 1.2vw, 12px);
+      padding: 6px 12px;
       background: var(--green-50);
       border-radius: 999px;
       user-select:none;
@@ -108,18 +109,16 @@
     }
 
     .live span{
-      font-size: clamp(11px, 0.4vw + 10px, 13px);
+      font-size: 13px;
       font-weight: 500;
       color: var(--green-700);
     }
 
-    /* Panels area becomes 2 columns when wide -> reduces overall height */
     .grid{
       display:grid;
-      gap: clamp(10px, 1.6vw, 12px);
+      gap: 12px;
       grid-template-columns: 1fr;
       align-content: start;
-      flex: 1; /* lets panels take remaining height without forcing */
     }
 
     @media (min-width: 640px){
@@ -128,21 +127,21 @@
 
     .panel{
       border-radius: var(--r-panel);
-      padding: clamp(14px, 2vw, 20px);
+      padding: 20px;
       box-sizing: border-box;
       display:flex;
       flex-direction: column;
-      justify-content: center; /* makes it look nice if card is taller */
-      min-height: clamp(96px, 14vh, 150px); /* height scales per panel */
+      justify-content: center;
+      min-height: 140px;
     }
 
     .panel.local{
-      background: #fff;
+      background: transparent;                 /* no solid bg */
       border: 1px solid var(--panel-border);
     }
 
     .panel.korea{
-      background: var(--blue-50-50);
+      background: var(--blue-50-50);           /* keep subtle tint */
       border: 1px solid var(--blue-100-50);
     }
 
@@ -151,28 +150,28 @@
       align-items:center;
       justify-content:space-between;
       gap: 10px;
-      margin-bottom: clamp(10px, 1.4vw, 12px);
+      margin-bottom: 12px;
     }
 
     .label{
-      font-size: clamp(10px, 0.35vw + 9px, 12px);
+      font-size: 12px;
       font-weight: 500;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.06em;
-      margin: 0 0 clamp(10px, 1.4vw, 12px) 0;
+      margin: 0 0 12px 0;
     }
 
     .time{
       margin: 0 0 8px 0;
-      font-size: clamp(16px, 0.9vw + 14px, 20px);
+      font-size: 20px;
       font-weight: 600;
       color: var(--text);
       line-height: 1.2;
     }
 
     .meta{
-      font-size: clamp(11px, 0.45vw + 10px, 13px);
+      font-size: 13px;
       color: var(--muted);
       line-height: 1.25;
       word-break: break-word;
@@ -183,7 +182,7 @@
       padding: 4px 10px;
       background: var(--blue-100);
       border-radius: 999px;
-      font-size: clamp(10px, 0.3vw + 9px, 11px);
+      font-size: 11px;
       font-weight: 600;
       color: var(--blue-700);
       white-space: nowrap;
@@ -194,28 +193,30 @@
 
 <body>
   <div class="wrap">
-    <div class="card" role="group" aria-label="Time widget">
-      <div class="header">
-        <h1 class="title">Time</h1>
-        <div class="live" aria-label="Live indicator">
-          <div class="dot" aria-hidden="true"></div>
-          <span>Live</span>
-        </div>
-      </div>
-
-      <div class="grid">
-        <div class="panel local">
-          <div class="label">Your local time (by IP)</div>
-          <div id="localTime" class="time">—</div>
-          <div id="localMeta" class="meta">—</div>
-        </div>
-
-        <div class="panel korea">
-          <div class="k-header">
-            <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
-            <div class="kst">KST</div>
+    <div class="scaled">
+      <div class="card" role="group" aria-label="Time widget">
+        <div class="header">
+          <h1 class="title">Time</h1>
+          <div class="live" aria-label="Live indicator">
+            <div class="dot" aria-hidden="true"></div>
+            <span>Live</span>
           </div>
-          <div id="krTime" class="time" style="margin:0;">—</div>
+        </div>
+
+        <div class="grid">
+          <div class="panel local">
+            <div class="label">Your local time (by IP)</div>
+            <div id="localTime" class="time">—</div>
+            <div id="localMeta" class="meta">—</div>
+          </div>
+
+          <div class="panel korea">
+            <div class="k-header">
+              <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
+              <div class="kst">KST</div>
+            </div>
+            <div id="krTime" class="time" style="margin:0;">—</div>
+          </div>
         </div>
       </div>
     </div>
@@ -267,9 +268,7 @@
           city = data.city || null;
           country = data.country_name || null;
           tzLocal = data.timezone || tzLocal;
-        } catch (_) {
-          // silent fallback
-        }
+        } catch (_) {}
       }
 
       loadIpData().finally(() => {
