@@ -27,31 +27,28 @@
       --r-panel: 12px;
     }
 
-    html, body { height: 100%; }
-    body{
-      margin:0;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      background: transparent;
-    }
-
-    .wrap{
-      min-height: 100%;
-      display:flex;
-      justify-content:center;
-      align-items:flex-start;
+    html, body {
+      height: 100%;
+      margin: 0;
       padding: 0;
-      box-sizing:border-box;
+      background: transparent;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     }
 
-    /* This is the key: let the component know its own width */
+    /* No outer padding at all */
     .widget{
-      width: min(100%, 720px);
-      container-type: inline-size; /* enables cqi units inside */
-      padding: clamp(6px, 2cqi, 16px);
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
       box-sizing: border-box;
+
+      container-type: inline-size; /* enables cqi units */
+      display: flex;
+      flex-direction: column;
     }
 
-    /* Everything below scales with the widget width via cqi (1% of container inline size) */
+    /* Everything scales with container width */
     .header{
       display:flex;
       align-items:center;
@@ -103,9 +100,9 @@
       gap: clamp(8px, 2.2cqi, 12px);
       grid-template-columns: 1fr;
       align-content: start;
+      flex: 1;
     }
 
-    /* When the embed is wide enough, go 2 columns (reduces height) */
     @container (min-width: 560px){
       .grid{ grid-template-columns: 1fr 1fr; }
     }
@@ -177,30 +174,28 @@
 </head>
 
 <body>
-  <div class="wrap">
-    <div class="widget" role="group" aria-label="Time widget">
-      <div class="header">
-        <h1 class="title">Time</h1>
-        <div class="live" aria-label="Live indicator">
-          <div class="dot" aria-hidden="true"></div>
-          <span>Live</span>
-        </div>
+  <div class="widget" role="group" aria-label="Time widget">
+    <div class="header">
+      <h1 class="title">Time</h1>
+      <div class="live" aria-label="Live indicator">
+        <div class="dot" aria-hidden="true"></div>
+        <span>Live</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="panel local">
+        <div class="label">Your local time (by IP)</div>
+        <div id="localTime" class="time">—</div>
+        <div id="localMeta" class="meta">—</div>
       </div>
 
-      <div class="grid">
-        <div class="panel local">
-          <div class="label">Your local time (by IP)</div>
-          <div id="localTime" class="time">—</div>
-          <div id="localMeta" class="meta">—</div>
+      <div class="panel korea">
+        <div class="k-header">
+          <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
+          <div class="kst">KST</div>
         </div>
-
-        <div class="panel korea">
-          <div class="k-header">
-            <div class="label" style="margin:0;">Korea time (Asia/Seoul)</div>
-            <div class="kst">KST</div>
-          </div>
-          <div id="krTime" class="time" style="margin:0;">—</div>
-        </div>
+        <div id="krTime" class="time" style="margin:0;">—</div>
       </div>
     </div>
   </div>
