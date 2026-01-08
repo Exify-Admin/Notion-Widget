@@ -64,15 +64,12 @@
       text-align: center;
     }
 
-    .error {
-      color: #b00020;
-      opacity: 0.9;
-    }
+    .error { color: #b00020; opacity: 0.95; }
   </style>
 
   <script>
     // =========================
-    // Counter animation plugin (unchanged)
+    // Counter animation plugin
     // =========================
     (function ($) {
       $.fn.countTo = function (options) {
@@ -107,15 +104,11 @@
             loopCount++;
             render(value);
 
-            if (typeof(settings.onUpdate) === 'function') settings.onUpdate.call(self, value);
-
             if (loopCount >= loops) {
               $self.removeData('countTo');
               clearInterval(data.interval);
               value = settings.to;
               render(value);
-
-              if (typeof(settings.onComplete) === 'function') settings.onComplete.call(self, value);
             }
           }
 
@@ -134,22 +127,24 @@
         decimals: 0,
         formatter: function (value, settings) {
           return value.toFixed(settings.decimals);
-        },
-        onUpdate: null,
-        onComplete: null
+        }
       };
     }(jQuery));
 
     jQuery(async function ($) {
       // =========================
-      // EDIT THESE TWO
+      // EDIT THESE IF NEEDED
+      // If this page is hosted on the SAME Vercel project, this works as-is:
       // =========================
-      const API_URL = "https://notion-widget-woad.vercel.app/api/notion-counts";
+      const API_URL = "/api/notion-counts";
       const REFRESH_MS = 2 * 60 * 1000; // 2 minutes
+
+      // If you enabled SHARED_KEY on the backend, use:
+      // const API_URL = "/api/notion-counts?key=YOUR_SHARED_KEY";
 
       const STATUS_ORDER = ["Queue", "In Progress", "Past Due", "Blocked", "Completed"];
 
-      // formatting (kept)
+      // formatting (commas)
       $('.count-number').data('countToOptions', {
         formatter: function (value, options) {
           return value.toFixed(options.decimals).replace(/\B(?=(?:\d{3})+(?!\d))/g, ',');
@@ -160,20 +155,13 @@
         $("#meta").text(text).toggleClass("error", !!isError);
       }
 
-      function normalizeApiPayload(payload) {
-        // supports either: {counts:{...}, updatedAt:"..."} OR {...}
-        const counts = payload?.counts ? payload.counts : payload;
-        const updatedAt = payload?.updatedAt || null;
-        return { counts: counts || {}, updatedAt };
-      }
-
       async function fetchCounts() {
         const res = await fetch(API_URL, { cache: "no-store" });
         if (!res.ok) {
           const txt = await res.text().catch(() => "");
           throw new Error(`API failed (${res.status}): ${txt}`);
         }
-        return normalizeApiPayload(await res.json());
+        return await res.json(); // { counts, total, updatedAt }
       }
 
       function applyCounts(counts) {
@@ -181,7 +169,6 @@
           const status = $(this).attr("data-status"); // safer than .data() for spaced strings
           const next = Number(counts?.[status] ?? 0);
 
-          // animate from current displayed value
           const currentText = ($(this).text() || "").replace(/,/g, "");
           const current = Number.parseInt(currentText, 10);
           const from = Number.isFinite(current) ? current : 0;
@@ -197,33 +184,31 @@
       async function refresh() {
         try {
           setMeta("Updating…", false);
-          const { counts, updatedAt } = await fetchCounts();
 
-          // Ensure missing statuses are treated as 0
+          const payload = await fetchCounts();
+          const counts = payload.counts || payload; // supports {counts:{}} or raw {}
+          const updatedAt = payload.updatedAt;
+
+          // fill missing statuses with 0
           for (const s of STATUS_ORDER) {
             if (counts[s] === undefined) counts[s] = 0;
           }
 
           applyCounts(counts);
 
-          if (updatedAt) {
-            setMeta(`Last updated: ${new Date(updatedAt).toLocaleString()}`, false);
-          } else {
-            setMeta(`Last updated: ${new Date().toLocaleString()}`, false);
-          }
+          const ts = updatedAt ? new Date(updatedAt) : new Date();
+          setMeta(`Last updated: ${ts.toLocaleString()}`, false);
         } catch (err) {
           console.error(err);
-          setMeta("Failed to load counts (check API_URL / CORS / key).", true);
-          // fall back to 0 so it doesn't look dead
+          setMeta("Failed to load counts. Check /api/notion-counts and Vercel env vars.", true);
+
+          // show zeros so it doesn't look broken
           const zeros = Object.fromEntries(STATUS_ORDER.map(s => [s, 0]));
           applyCounts(zeros);
         }
       }
 
-      // initial load
       await refresh();
-
-      // auto refresh
       setInterval(refresh, REFRESH_MS);
     });
   </script>
@@ -231,7 +216,6 @@
 
 <body>
   <div class="wrapper">
-
     <div class="counter">
       <i class="fas fa-stream fa-2x"></i>
       <h2 class="timer count-title count-number" data-status="Queue" data-speed="900">0</h2>
@@ -261,7 +245,6 @@
       <h2 class="timer count-title count-number" data-status="Completed" data-speed="900">0</h2>
       <p class="count-text">Completed</p>
     </div>
-
   </div>
 
   <div id="meta" class="meta">Loading…</div>
