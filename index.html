@@ -133,15 +133,10 @@
 
     jQuery(async function ($) {
       // =========================
-      // EDIT THESE IF NEEDED
-      // If this page is hosted on the SAME Vercel project, this works as-is:
+      // CONFIG
       // =========================
-      const API_URL = "/api/notion-counts?key=k7Qm3p9Lx2R8v5N";
+      const API_URL = "https://notion-widget-woad.vercel.app/api/notion-counts?key=k7Qm3p9Lx2R8v5N";
       const REFRESH_MS = 2 * 60 * 1000; // 2 minutes
-
-      // If you enabled SHARED_KEY on the backend, use:
-      // const API_URL = "/api/notion-counts?key=YOUR_SHARED_KEY";
-
       const STATUS_ORDER = ["Queue", "In Progress", "Past Due", "Blocked", "Completed"];
 
       // formatting (commas)
@@ -166,8 +161,8 @@
 
       function applyCounts(counts) {
         $(".timer[data-status]").each(function () {
-          const status = $(this).attr("data-status"); // safer than .data() for spaced strings
-          const next = Number(counts?.[status] ?? 0);
+          const status = $(this).attr("data-status"); // safe for spaced strings
+          const next = Math.max(0, Number.parseInt(counts?.[status] ?? 0, 10) || 0);
 
           const currentText = ($(this).text() || "").replace(/,/g, "");
           const current = Number.parseInt(currentText, 10);
@@ -200,9 +195,8 @@
           setMeta(`Last updated: ${ts.toLocaleString()}`, false);
         } catch (err) {
           console.error(err);
-          setMeta("Failed to load counts. Check /api/notion-counts and Vercel env vars.", true);
+          setMeta("Failed to load counts. Check API URL / Vercel env vars.", true);
 
-          // show zeros so it doesn't look broken
           const zeros = Object.fromEntries(STATUS_ORDER.map(s => [s, 0]));
           applyCounts(zeros);
         }
