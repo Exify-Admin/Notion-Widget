@@ -4,218 +4,204 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css" rel="stylesheet">
-  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
-          integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs="
-          crossorigin="anonymous"></script>
 
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: transparent; color: #808080; }
-    .wrapper {
-      width: 100%;
-      max-width: 1100px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px;
-      padding: 12px;
-      box-sizing: border-box;
+    .wrapper{
+      width:100%;
+      max-width:1100px;
+      margin:0 auto;
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));
+      gap:12px;
+      padding:12px;
+      box-sizing:border-box;
     }
-    .counter { background-color: #e8e8e8; padding: 16px 12px; border-radius: 10px; text-align: center; }
-    .count-title { font-size: 34px; font-weight: 700; margin: 10px 0 0; line-height: 1.1; color: #4a4a4a; }
-    .count-text { font-size: 13px; margin: 8px 0 0; opacity: 0.9; color: #6a6a6a; }
-    .fa-2x { margin: 0 auto; display: table; color: #4ad1e5; }
-    .meta { font-size: 12px; opacity: 0.7; padding: 0 12px 12px; box-sizing: border-box; text-align: center; }
-    .error { color: #b00020; opacity: 0.95; }
+    .counter{ background:#e8e8e8; padding:16px 12px; border-radius:10px; text-align:center; }
+    .count-title{ font-size:34px; font-weight:700; margin:10px 0 0; line-height:1.1; color:#4a4a4a; }
+    .count-text{ font-size:13px; margin:8px 0 0; opacity:.9; color:#6a6a6a; }
+    .fa-2x{ margin:0 auto; display:table; color:#4ad1e5; }
+    .meta{ font-size:12px; opacity:.7; padding:0 12px 12px; box-sizing:border-box; text-align:center; }
+    .error{ color:#b00020; opacity:.95; }
   </style>
 
   <script>
     // =========================
-    // Counter animation plugin (stable)
+    // CONFIG — EDIT THESE
     // =========================
-    (function ($) {
-      $.fn.countTo = function (options) {
-        options = options || {};
-        return $(this).each(function () {
-          var $self = $(this);
+    const API_URL = "https://notion-widget-woad.vercel.app/api/notion-counts?key=k7Qm3p9Lx2R8v5N";
 
-          // Kill any previous animation interval attached to this element
-          var existing = $self.data('countTo') || {};
-          if (existing.interval) clearInterval(existing.interval);
+    // Poll rate (keep >= 10s to avoid twitch + overlapping)
+    const REFRESH_MS = 15000;
 
-          var settings = $.extend({}, $.fn.countTo.defaults, {
-            from: $self.data('from') ?? 0,
-            to: $self.data('to') ?? 0,
-            speed: $self.data('speed') ?? 1600,
-            refreshInterval: $self.data('refresh-interval') ?? 60,
-            decimals: $self.data('decimals') ?? 0
-          }, options);
+    // Animation tuning (smooth + not sputtery)
+    const FIRST_LOAD_DURATION_MS = 900;   // count up from 0 on load
+    const UPDATE_DURATION_MS     = 650;   // count between changes
+    const FRAME_MS               = 16;    // ~60fps
+    const INSTANT_DELTA_MAX      = 2;     // if change is +/- 1 or 2, just snap (no animation)
 
-          var loops = Math.max(1, Math.ceil(settings.speed / settings.refreshInterval));
-          var increment = (settings.to - settings.from) / loops;
+    // Must match your Notion status names exactly
+    const STATUS_ORDER = ["Queue", "In Progress", "Past Due", "Blocked", "Completed"];
 
-          var loopCount = 0;
-          var value = settings.from;
+    // =========================
+    // HELPERS
+    // =========================
+    const fmt = (n) => Number(n).toLocaleString("en-US");
+    const clampInt = (v) => {
+      const n = Number.parseInt(v, 10);
+      return Number.isFinite(n) ? Math.max(0, n) : 0;
+    };
 
-          var data = { interval: null };
-          $self.data('countTo', data);
+    function setMeta(text, isError) {
+      const el = document.getElementById("meta");
+      el.textContent = text;
+      el.classList.toggle("error", !!isError);
+    }
 
-          // Mark as animating
-          $self.data('animating', true);
+    async function fetchCountsPayload() {
+      // cache: "no-store" helps the browser; Vercel caching is controlled server-side.
+      const res = await fetch(API_URL, { cache: "no-store" });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`API failed (${res.status}): ${txt}`);
+      }
+      return await res.json(); // { counts, total, updatedAt }
+    }
 
-          render(value);
+    function normalizeCounts(payload) {
+      const raw = payload.counts || payload || {};
+      const counts = {};
+      for (const s of STATUS_ORDER) counts[s] = clampInt(raw[s]);
+      return counts;
+    }
 
-          data.interval = setInterval(function updateTimer() {
-            value += increment;
-            loopCount++;
-            render(value);
+    // =========================
+    // PER-TILE ANIMATION ENGINE
+    // - No jQuery / no setInterval stacking
+    // - requestAnimationFrame (smooth)
+    // - Cancels any in-flight animation per tile
+    // - Snaps small changes instantly
+    // =========================
+    function animateNumber(el, from, to, durationMs) {
+      from = clampInt(from);
+      to   = clampInt(to);
 
-            if (loopCount >= loops) {
-              clearInterval(data.interval);
-              $self.removeData('countTo');
-              value = settings.to;
-              render(value);
+      // Cancel any previous animation on this element
+      const prevRaf = el._rafId;
+      if (prevRaf) cancelAnimationFrame(prevRaf);
+      el._rafId = null;
 
-              // Done animating
-              $self.data('animating', false);
+      // If tiny delta, just snap (prevents jitter on 4->5 etc.)
+      if (Math.abs(to - from) <= INSTANT_DELTA_MAX || durationMs <= 0) {
+        el.textContent = fmt(to);
+        el._current = to;
+        return;
+      }
 
-              if (typeof settings.onComplete === "function") {
-                settings.onComplete.call($self[0], value);
-              }
-            }
-          }, settings.refreshInterval);
+      const start = performance.now();
+      const delta = to - from;
 
-          function render(v) {
-            var formattedValue = settings.formatter.call($self[0], v, settings);
-            $self.html(formattedValue);
-          }
-        });
-      };
+      // Ease-out for nicer feel (fast start, gentle stop)
+      const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
-      $.fn.countTo.defaults = {
-        from: 0,
-        to: 0,
-        speed: 1600,
-        refreshInterval: 60,
-        decimals: 0,
-        formatter: function (value, settings) {
-          return value.toFixed(settings.decimals);
-        },
-        onComplete: null
-      };
-    }(jQuery));
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / durationMs);
+        const eased = easeOutCubic(t);
+        const value = Math.round(from + delta * eased);
+        el.textContent = fmt(value);
+        el._current = value;
 
-    jQuery(function ($) {
-      // =========================
-      // CONFIG
-      // =========================
-      const API_URL = "https://notion-widget-woad.vercel.app/api/notion-counts?key=k7Qm3p9Lx2R8v5N";
-
-      // Polling: slower = smoother + less chance of overlapping
-      const REFRESH_MS = 15000; // 15 seconds (recommended)
-
-      // Animation timing (slower + smoother)
-      const FIRST_LOAD_SPEED_MS = 2200;
-      const UPDATE_SPEED_MS     = 1600;
-
-      const STATUS_ORDER = ["Queue", "In Progress", "Past Due", "Blocked", "Completed"];
-
-      // Commas formatting
-      $('.count-number').data('countToOptions', {
-        formatter: function (value, options) {
-          return value.toFixed(options.decimals).replace(/\B(?=(?:\d{3})+(?!\d))/g, ',');
+        if (t < 1) {
+          el._rafId = requestAnimationFrame(step);
+        } else {
+          el.textContent = fmt(to);
+          el._current = to;
+          el._rafId = null;
         }
+      };
+
+      el._current = from;
+      el.textContent = fmt(from);
+      el._rafId = requestAnimationFrame(step);
+    }
+
+    function setInstantAll(counts) {
+      document.querySelectorAll(".timer[data-status]").forEach((el) => {
+        const status = el.getAttribute("data-status");
+        const v = clampInt(counts[status]);
+        el.textContent = fmt(v);
+        el._current = v;
       });
+    }
 
-      let lastCounts = null;
-      let tickInFlight = false; // prevents overlapping API calls
+    function animateAllFromZero(counts) {
+      document.querySelectorAll(".timer[data-status]").forEach((el) => {
+        const status = el.getAttribute("data-status");
+        const to = clampInt(counts[status]);
+        animateNumber(el, 0, to, FIRST_LOAD_DURATION_MS);
+      });
+    }
 
-      function setMeta(text, isError) {
-        $("#meta").text(text).toggleClass("error", !!isError);
-      }
+    function animateOnlyChanged(prevCounts, nextCounts) {
+      document.querySelectorAll(".timer[data-status]").forEach((el) => {
+        const status = el.getAttribute("data-status");
+        const prev = clampInt(prevCounts[status]);
+        const next = clampInt(nextCounts[status]);
 
-      async function fetchCountsPayload() {
-        const res = await fetch(API_URL, { cache: "no-store" });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => "");
-          throw new Error(`API failed (${res.status}): ${txt}`);
+        if (prev === next) return;
+
+        // If element is mid-animation, use its currently displayed value as "from"
+        const currentDisplayed = clampInt((el.textContent || "").replace(/,/g, ""));
+        const from = Number.isFinite(currentDisplayed) ? currentDisplayed : prev;
+
+        animateNumber(el, from, next, UPDATE_DURATION_MS);
+      });
+    }
+
+    // =========================
+    // MAIN LOOP (no overlap)
+    // =========================
+    let lastCounts = null;
+    let tickInFlight = false;
+
+    async function tick() {
+      if (tickInFlight) return;
+      tickInFlight = true;
+
+      try {
+        const payload = await fetchCountsPayload();
+        const counts = normalizeCounts(payload);
+
+        if (!lastCounts) {
+          // First load: count up from 0 (your request)
+          animateAllFromZero(counts);
+        } else {
+          // Later: animate only changed tiles (up or down)
+          animateOnlyChanged(lastCounts, counts);
         }
-        return await res.json();
-      }
 
-      function normalizeCounts(payload) {
-        const counts = payload.counts || payload;
-        for (const s of STATUS_ORDER) {
-          if (counts[s] === undefined) counts[s] = 0;
+        lastCounts = { ...counts };
+
+        const ts = payload.updatedAt ? new Date(payload.updatedAt) : new Date();
+        setMeta(`Last checked: ${ts.toLocaleString()}`, false);
+      } catch (err) {
+        console.error(err);
+        setMeta("Failed to load counts. Check API URL / key / Vercel env vars.", true);
+
+        // Don't thrash numbers on failure; leave last good values.
+        // If there were no good values yet, show zeros once.
+        if (!lastCounts) {
+          const zeros = Object.fromEntries(STATUS_ORDER.map(s => [s, 0]));
+          setInstantAll(zeros);
+          lastCounts = zeros;
         }
-        return counts;
+      } finally {
+        tickInFlight = false;
       }
+    }
 
-      function animateEl($el, from, to, speedMs) {
-        // If already animating, skip this update (prevents twitchy restart)
-        if ($el.data("animating")) return;
-
-        $el.attr("data-from", from);
-        $el.attr("data-to", to);
-        $el.attr("data-speed", speedMs);
-
-        const options = $.extend({}, $el.data("countToOptions") || {});
-        $el.countTo(options);
-      }
-
-      function animateAllFromZero(counts) {
-        $(".timer[data-status]").each(function () {
-          const $el = $(this);
-          const status = $el.attr("data-status");
-          const next = Math.max(0, parseInt(counts[status] ?? 0, 10) || 0);
-
-          // ensure it's not flagged animating from some weird prior state
-          $el.data("animating", false);
-
-          animateEl($el, 0, next, FIRST_LOAD_SPEED_MS);
-        });
-      }
-
-      function animateOnlyChanged(counts) {
-        $(".timer[data-status]").each(function () {
-          const $el = $(this);
-          const status = $el.attr("data-status");
-          const next = Math.max(0, parseInt(counts[status] ?? 0, 10) || 0);
-          const prev = (lastCounts && lastCounts[status] !== undefined) ? lastCounts[status] : next;
-
-          if (prev === next) return;
-
-          // Animate from prev -> next (up OR down), but only if not mid-animation
-          animateEl($el, prev, next, UPDATE_SPEED_MS);
-        });
-      }
-
-      async function tick() {
-        if (tickInFlight) return; // no overlap
-        tickInFlight = true;
-
-        try {
-          const payload = await fetchCountsPayload();
-          const counts = normalizeCounts(payload);
-
-          if (!lastCounts) {
-            animateAllFromZero(counts);
-          } else {
-            animateOnlyChanged(counts);
-          }
-
-          lastCounts = { ...counts };
-
-          const ts = payload.updatedAt ? new Date(payload.updatedAt) : new Date();
-          setMeta(`Last checked: ${ts.toLocaleString()}`, false);
-        } catch (err) {
-          console.error(err);
-          setMeta("Failed to load counts. Check API URL / Vercel env vars.", true);
-        } finally {
-          tickInFlight = false;
-        }
-      }
-
-      // Run once now, then poll
+    // Start on DOM ready
+    window.addEventListener("DOMContentLoaded", () => {
       tick();
       setInterval(tick, REFRESH_MS);
     });
@@ -226,31 +212,31 @@
   <div class="wrapper">
     <div class="counter">
       <i class="fas fa-stream fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Queue">0</h2>
+      <h2 class="timer count-title" data-status="Queue">0</h2>
       <p class="count-text">Queue</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-tools fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="In Progress">0</h2>
+      <h2 class="timer count-title" data-status="In Progress">0</h2>
       <p class="count-text">In Progress</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-exclamation-triangle fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Past Due">0</h2>
+      <h2 class="timer count-title" data-status="Past Due">0</h2>
       <p class="count-text">Past Due</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-ban fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Blocked">0</h2>
+      <h2 class="timer count-title" data-status="Blocked">0</h2>
       <p class="count-text">Blocked</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-check-circle fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Completed">0</h2>
+      <h2 class="timer count-title" data-status="Completed">0</h2>
       <p class="count-text">Completed</p>
     </div>
   </div>
