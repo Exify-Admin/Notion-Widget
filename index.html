@@ -9,14 +9,7 @@
           crossorigin="anonymous"></script>
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background: transparent;
-      color: #808080;
-    }
-
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: transparent; color: #808080; }
     .wrapper {
       width: 100%;
       max-width: 1100px;
@@ -27,43 +20,11 @@
       padding: 12px;
       box-sizing: border-box;
     }
-
-    .counter {
-      background-color: #e8e8e8;
-      padding: 16px 12px;
-      border-radius: 10px;
-      text-align: center;
-    }
-
-    .count-title {
-      font-size: 34px;
-      font-weight: 700;
-      margin: 10px 0 0;
-      line-height: 1.1;
-      color: #4a4a4a;
-    }
-
-    .count-text {
-      font-size: 13px;
-      margin: 8px 0 0;
-      opacity: 0.9;
-      color: #6a6a6a;
-    }
-
-    .fa-2x {
-      margin: 0 auto;
-      display: table;
-      color: #4ad1e5;
-    }
-
-    .meta {
-      font-size: 12px;
-      opacity: 0.7;
-      padding: 0 12px 12px;
-      box-sizing: border-box;
-      text-align: center;
-    }
-
+    .counter { background-color: #e8e8e8; padding: 16px 12px; border-radius: 10px; text-align: center; }
+    .count-title { font-size: 34px; font-weight: 700; margin: 10px 0 0; line-height: 1.1; color: #4a4a4a; }
+    .count-text { font-size: 13px; margin: 8px 0 0; opacity: 0.9; color: #6a6a6a; }
+    .fa-2x { margin: 0 auto; display: table; color: #4ad1e5; }
+    .meta { font-size: 12px; opacity: 0.7; padding: 0 12px 12px; box-sizing: border-box; text-align: center; }
     .error { color: #b00020; opacity: 0.95; }
   </style>
 
@@ -78,7 +39,7 @@
           var settings = $.extend({}, $.fn.countTo.defaults, {
             from: $(this).data('from') ?? 0,
             to: $(this).data('to') ?? 0,
-            speed: $(this).data('speed') ?? 300,
+            speed: $(this).data('speed') ?? 900,
             refreshInterval: $(this).data('refresh-interval') ?? 50,
             decimals: $(this).data('decimals') ?? 0
           }, options);
@@ -93,7 +54,6 @@
               data = $self.data('countTo') || {};
 
           $self.data('countTo', data);
-
           if (data.interval) clearInterval(data.interval);
           data.interval = setInterval(updateTimer, settings.refreshInterval);
 
@@ -122,7 +82,7 @@
       $.fn.countTo.defaults = {
         from: 0,
         to: 0,
-        speed: 300,
+        speed: 900,
         refreshInterval: 50,
         decimals: 0,
         formatter: function (value, settings) {
@@ -136,11 +96,7 @@
       // CONFIG
       // =========================
       const API_URL = "https://notion-widget-woad.vercel.app/api/notion-counts?key=k7Qm3p9Lx2R8v5N";
-      const REFRESH_MS = 2000; // 2 seconds (feels realtime)
       const STATUS_ORDER = ["Queue", "In Progress", "Past Due", "Blocked", "Completed"];
-
-      // Keep last values so we only animate when something actually changes
-      let lastCounts = {};
 
       // formatting (commas)
       $('.count-number').data('countToOptions', {
@@ -162,55 +118,45 @@
         return await res.json(); // { counts, total, updatedAt }
       }
 
-      function applyCounts(counts) {
+      function animateOnce(counts) {
         $(".timer[data-status]").each(function () {
           const status = $(this).attr("data-status");
           const next = Math.max(0, Number.parseInt(counts?.[status] ?? 0, 10) || 0);
 
-          // If unchanged, don't re-animate (prevents "keeps counting up")
-          if (lastCounts[status] === next) return;
-
-          const currentText = ($(this).text() || "").replace(/,/g, "");
-          const current = Number.parseInt(currentText, 10);
-          const from = Number.isFinite(current) ? current : 0;
-
-          $(this).attr("data-from", from);
+          // Always animate from 0 ONCE on initial page load
+          $(this).attr("data-from", 0);
           $(this).attr("data-to", next);
 
           const options = $.extend({}, $(this).data('countToOptions') || {});
           $(this).countTo(options);
-
-          lastCounts[status] = next;
         });
       }
 
-      async function refresh() {
-        try {
-          const payload = await fetchCounts();
-          const counts = payload.counts || payload;
-          const updatedAt = payload.updatedAt;
+      try {
+        setMeta("Loading…", false);
 
-          // fill missing statuses with 0 (and keep stable keys)
-          for (const s of STATUS_ORDER) {
-            if (counts[s] === undefined) counts[s] = 0;
-          }
+        const payload = await fetchCounts();
+        const counts = payload.counts || payload;
+        const updatedAt = payload.updatedAt;
 
-          applyCounts(counts);
-
-          const ts = updatedAt ? new Date(updatedAt) : new Date();
-          setMeta(`Last updated: ${ts.toLocaleString()}`, false);
-        } catch (err) {
-          console.error(err);
-          setMeta("Failed to load counts. Check API URL / Vercel env vars.", true);
-
-          // fallback to zeros (but only animate if values changed)
-          const zeros = Object.fromEntries(STATUS_ORDER.map(s => [s, 0]));
-          applyCounts(zeros);
+        // fill missing statuses with 0
+        for (const s of STATUS_ORDER) {
+          if (counts[s] === undefined) counts[s] = 0;
         }
-      }
 
-      await refresh();
-      setInterval(refresh, REFRESH_MS);
+        // Animate ONLY once (on first load)
+        animateOnce(counts);
+
+        const ts = updatedAt ? new Date(updatedAt) : new Date();
+        setMeta(`Loaded: ${ts.toLocaleString()}`, false);
+
+      } catch (err) {
+        console.error(err);
+        setMeta("Failed to load counts. Check API URL / Vercel env vars.", true);
+
+        // Show 0s without looping/refreshing
+        $(".timer[data-status]").text("0");
+      }
     });
   </script>
 </head>
@@ -219,31 +165,31 @@
   <div class="wrapper">
     <div class="counter">
       <i class="fas fa-stream fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Queue" data-speed="300">0</h2>
+      <h2 class="timer count-title count-number" data-status="Queue" data-speed="900">0</h2>
       <p class="count-text">Queue</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-tools fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="In Progress" data-speed="300">0</h2>
+      <h2 class="timer count-title count-number" data-status="In Progress" data-speed="900">0</h2>
       <p class="count-text">In Progress</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-exclamation-triangle fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Past Due" data-speed="300">0</h2>
+      <h2 class="timer count-title count-number" data-status="Past Due" data-speed="900">0</h2>
       <p class="count-text">Past Due</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-ban fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Blocked" data-speed="300">0</h2>
+      <h2 class="timer count-title count-number" data-status="Blocked" data-speed="900">0</h2>
       <p class="count-text">Blocked</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-check-circle fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Completed" data-speed="300">0</h2>
+      <h2 class="timer count-title count-number" data-status="Completed" data-speed="900">0</h2>
       <p class="count-text">Completed</p>
     </div>
   </div>
