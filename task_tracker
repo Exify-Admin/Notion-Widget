@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0-2/css/all.min.css" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+          integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs="
+          crossorigin="anonymous"></script>
+
+  <script>
+    (function ($) {
+      $.fn.countTo = function (options) {
+        options = options || {};
+        return $(this).each(function () {
+          var settings = $.extend({}, $.fn.countTo.defaults, {
+            from: $(this).data('from') ?? 0,
+            to: $(this).data('to') ?? 0,
+            speed: $(this).data('speed') ?? 1000,
+            refreshInterval: $(this).data('refresh-interval') ?? 50,
+            decimals: $(this).data('decimals') ?? 0
+          }, options);
+
+          var loops = Math.ceil(settings.speed / settings.refreshInterval),
+              increment = (settings.to - settings.from) / loops;
+
+          var self = this,
+              $self = $(this),
+              loopCount = 0,
+              value = settings.from,
+              data = $self.data('countTo') || {};
+
+          $self.data('countTo', data);
+
+          if (data.interval) clearInterval(data.interval);
+          data.interval = setInterval(updateTimer, settings.refreshInterval);
+
+          render(value);
+
+          function updateTimer() {
+            value += increment;
+            loopCount++;
+            render(value);
+
+            if (typeof(settings.onUpdate) === 'function') settings.onUpdate.call(self, value);
+
+            if (loopCount >= loops) {
+              $self.removeData('countTo');
+              clearInterval(data.interval);
+              value = settings.to;
+              render(value);
+
+              if (typeof(settings.onComplete) === 'function') settings.onComplete.call(self, value);
+            }
+          }
+
+          function render(value) {
+            var formattedValue = settings.formatter.call(self, value, settings);
+            $self.html(formattedValue);
+          }
+        });
+      };
+
+      $.fn.countTo.defaults = {
+        from: 0,
+        to: 0,
+        speed: 1000,
+        refreshInterval: 50,
+        decimals: 0,
+        formatter: function (value, settings) {
+          return value.toFixed(settings.decimals);
+        },
+        onUpdate: null,
+        onComplete: null
+      };
+    }(jQuery));
+
+    jQuery(async function ($) {
+      // =========================
+      // 1) CONFIG — EDIT THESE
+      // =========================
+      const NOTION_TOKEN = "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"; // <-- PUT YOUR INTERNAL INTEGRATION SECRET HERE
+      const DATABASE_ID  = "f1ef774e8e0f40e19a3860a185bb5d0f"; // <-- PUT YOUR DATABASE ID HERE (32 hex chars, dashes optional)
+      const STATUS_PROP  = "Status"; // <-- EXACT Notion property name (case-sensitive)
+
+      // Optional: if you only care about these statuses, set them here.
+      // Anything else will get counted under "Other".
+      const STATUS_ORDER = ["In Progress", "Queue", "Past Due", "Blocked", "Completed"];
+
+      // =========================
+      // 2) NOTION QUERY + PAGINATION
+      // =========================
+      async function queryNotionAllPages() {
+        const all = [];
+        let hasMore = true;
+        let startCursor = undefined;
+
+        while (hasMore) {
+          const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${NOTION_TOKEN}`,
+              "Notion-Version": "2022-06-28",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              page_size: 100,
+              ...(startCursor ? { start_cursor: startCursor } : {})
+              // You can add filters/sorts here if you want
+              // sort: [{ property: "Created time", direction: "descending" }]
+              // filter: { property: STATUS_PROP, status: { does_not_equal: "Done" } }
+            })
+          });
+
+          if (!res.ok) {
+            const txt = await res.text().catch(() => "");
+            throw new Error(`Notion query failed: ${res.status} ${res.statusText}\n${txt}`);
+          }
+
+          const data = await res.json();
+          all.push(...(data.results || []));
+          hasMore = !!data.has_more;
+          startCursor = data.next_cursor;
+        }
+
+        return all;
+      }
+
+      // =========================
+      // 3) EXTRACT STATUS NAME SAFELY
+      // =========================
+      function getStatusName(page) {
+        const prop = page?.properties?.[STATUS_PROP];
+        // Notion "Status" property shape: { type:"status", status:{ name:"WIP", ... } }
+        const name = prop?.status?.name;
+        return (name || "Unknown").trim();
+      }
+
+      // =========================
+      // 4) COUNT STATUSES
+      // =========================
+      function countByStatus(pages) {
+        const counts = Object.fromEntries(STATUS_ORDER.map(s => [s, 0]));
+        counts.Other = 0;
+
+        for (const p of pages) {
+          const s = getStatusName(p);
+          if (STATUS_ORDER.includes(s)) counts[s] += 1;
+          else counts.Other += 1;
+        }
+        return counts;
+      }
+
+      // =========================
+      // 5) APPLY COUNTS TO UI + ANIMATE
+      // =========================
+      try {
+        const pages = await queryNotionAllPages();
+        const counts = countByStatus(pages);
+
+        $(".timer[data-status]").each(function () {
+          const status = $(this).data("status");
+          const n = counts[status] ?? 0;
+          $(this).attr("data-from", 0);
+          $(this).attr("data-to", n);
+        });
+
+        // formatting (kept from your original)
+        $('.count-number').data('countToOptions', {
+          formatter: function (value, options) {
+            return value.toFixed(options.decimals).replace(/\B(?=(?:\d{3})+(?!\d))/g, ',');
+          }
+        });
+
+        // start animation
+        $('.timer').each(function () {
+          const $this = $(this);
+          const options = $.extend({}, $this.data('countToOptions') || {});
+          $this.countTo(options);
+        });
+
+      } catch (err) {
+        console.error(err);
+        // If API fails, show 0s so your widget doesn't look broken
+        $(".timer[data-status]").each(function () {
+          $(this).text("0");
+        });
+      }
+    });
+  </script>
+
+  <style>
+    body {
+      font-family: Arial;
+      padding: 25px;
+      background-color: #fff;
+      color: #808080;
+      text-align: center;
+    }
+    .col_third { width: 29%; }
+    .col_third{
+      position: relative;
+      display: inline-block;
+      float: left;
+      margin: 2%;
+      margin-bottom: 20px;
+    }
+    .wrapper { width: 980px; margin: 30px auto; position: relative;}
+    .counter { background-color: #e8e8e8; padding: 20px 0; border-radius: 5px;}
+    .count-title { font-size: 40px; font-weight: normal; margin-top: 10px; margin-bottom: 0; text-align: center; }
+    .count-text { font-size: 13px; font-weight: normal; margin-top: 10px; margin-bottom: 0; text-align: center; }
+    .fa-2x { margin: 0 auto; float: none; display: table; color: #4ad1e5; }
+  </style>
+</head>
+
+<body>
+  <div class="wrapper">
+    <div class="counter col_third">
+      <i class="fas fa-stream fa-2x"></i>
+      <h2 class="timer count-title count-number" data-status="Queue" data-speed="900"></h2>
+      <p class="count-text">Queue</p>
+    </div>
+
+    <div class="counter col_third">
+      <i class="fas fa-tools fa-2x"></i>
+      <h2 class="timer count-title count-number" data-status="In Progress" data-speed="900"></h2>
+      <p class="count-text">In Progress</p>
+    </div>
+
+    <div class="counter col_third">
+      <i class="fas fa-exclamation-triangle fa-2x"></i>
+      <h2 class="timer count-title count-number" data-status="Past Due" data-speed="900"></h2>
+      <p class="count-text">Past Due</p>
+    </div>
+
+    <div class="counter col_third">
+      <i class="fas fa-ban fa-2x"></i>
+      <h2 class="timer count-title count-number" data-status="Blocked" data-speed="900"></h2>
+      <p class="count-text">Blocked</p>
+    </div>
+
+    <div class="counter col_third">
+      <i class="fas fa-check-circle fa-2x"></i>
+      <h2 class="timer count-title count-number" data-status="Completed" data-speed="900"></h2>
+      <p class="count-text">Completed</p>
+    </div>
+  </div>
+</body>
+</html>
