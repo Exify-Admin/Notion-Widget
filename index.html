@@ -31,6 +31,8 @@
   <script>
     // =========================
     // Counter animation plugin
+    // - Counts UP or DOWN from current -> target
+    // - We will only call it when a value actually changes
     // =========================
     (function ($) {
       $.fn.countTo = function (options) {
@@ -39,13 +41,13 @@
           var settings = $.extend({}, $.fn.countTo.defaults, {
             from: $(this).data('from') ?? 0,
             to: $(this).data('to') ?? 0,
-            speed: $(this).data('speed') ?? 900,
-            refreshInterval: $(this).data('refresh-interval') ?? 50,
+            speed: $(this).data('speed') ?? 350,
+            refreshInterval: $(this).data('refresh-interval') ?? 30,
             decimals: $(this).data('decimals') ?? 0
           }, options);
 
-          var loops = Math.ceil(settings.speed / settings.refreshInterval),
-              increment = (settings.to - settings.from) / loops;
+          var loops = Math.max(1, Math.ceil(settings.speed / settings.refreshInterval));
+          var increment = (settings.to - settings.from) / loops;
 
           var self = this,
               $self = $(this),
@@ -82,8 +84,8 @@
       $.fn.countTo.defaults = {
         from: 0,
         to: 0,
-        speed: 900,
-        refreshInterval: 50,
+        speed: 350,
+        refreshInterval: 30,
         decimals: 0,
         formatter: function (value, settings) {
           return value.toFixed(settings.decimals);
@@ -96,14 +98,18 @@
       // CONFIG
       // =========================
       const API_URL = "https://notion-widget-woad.vercel.app/api/notion-counts?key=k7Qm3p9Lx2R8v5N";
+      const REFRESH_MS = 15000; // 15s feels "live" without being annoying
       const STATUS_ORDER = ["Queue", "In Progress", "Past Due", "Blocked", "Completed"];
 
-      // formatting (commas)
+      // commas formatting
       $('.count-number').data('countToOptions', {
         formatter: function (value, options) {
           return value.toFixed(options.decimals).replace(/\B(?=(?:\d{3})+(?!\d))/g, ',');
         }
       });
+
+      // Store last values so we only update changed tiles
+      let lastCounts = null;
 
       function setMeta(text, isError) {
         $("#meta").text(text).toggleClass("error", !!isError);
@@ -118,45 +124,65 @@
         return await res.json(); // { counts, total, updatedAt }
       }
 
-      function animateOnce(counts) {
+      function normalizeCounts(payload) {
+        const counts = payload.counts || payload;
+        for (const s of STATUS_ORDER) {
+          if (counts[s] === undefined) counts[s] = 0;
+        }
+        return counts;
+      }
+
+      function setInstant(counts) {
+        // First load: set values without animation (or you can animate from 0 if you want)
         $(".timer[data-status]").each(function () {
           const status = $(this).attr("data-status");
-          const next = Math.max(0, Number.parseInt(counts?.[status] ?? 0, 10) || 0);
+          const n = Math.max(0, parseInt(counts[status] ?? 0, 10) || 0);
+          $(this).text(n.toLocaleString());
+        });
+      }
 
-          // Always animate from 0 ONCE on initial page load
-          $(this).attr("data-from", 0);
+      function animateChanged(counts) {
+        $(".timer[data-status]").each(function () {
+          const status = $(this).attr("data-status");
+          const next = Math.max(0, parseInt(counts[status] ?? 0, 10) || 0);
+
+          const prev = lastCounts ? (lastCounts[status] ?? next) : next;
+          if (prev === next) return; // only animate changed ones
+
+          // Animate from prev -> next (up OR down)
+          $(this).attr("data-from", prev);
           $(this).attr("data-to", next);
 
-          const options = $.extend({}, $(this).data('countToOptions') || {});
+          const options = $.extend({}, $(this).data("countToOptions") || {});
           $(this).countTo(options);
         });
       }
 
-      try {
-        setMeta("Loading…", false);
+      async function tick() {
+        try {
+          const payload = await fetchCounts();
+          const counts = normalizeCounts(payload);
 
-        const payload = await fetchCounts();
-        const counts = payload.counts || payload;
-        const updatedAt = payload.updatedAt;
+          if (!lastCounts) {
+            // First paint: set instantly (no animation)
+            setInstant(counts);
+          } else {
+            // Subsequent: animate only changed ones (prev -> next)
+            animateChanged(counts);
+          }
 
-        // fill missing statuses with 0
-        for (const s of STATUS_ORDER) {
-          if (counts[s] === undefined) counts[s] = 0;
+          lastCounts = { ...counts };
+
+          const ts = payload.updatedAt ? new Date(payload.updatedAt) : new Date();
+          setMeta(`Last checked: ${ts.toLocaleString()}`, false);
+        } catch (err) {
+          console.error(err);
+          setMeta("Failed to load counts. Check API URL / Vercel env vars.", true);
         }
-
-        // Animate ONLY once (on first load)
-        animateOnce(counts);
-
-        const ts = updatedAt ? new Date(updatedAt) : new Date();
-        setMeta(`Loaded: ${ts.toLocaleString()}`, false);
-
-      } catch (err) {
-        console.error(err);
-        setMeta("Failed to load counts. Check API URL / Vercel env vars.", true);
-
-        // Show 0s without looping/refreshing
-        $(".timer[data-status]").text("0");
       }
+
+      await tick();
+      setInterval(tick, REFRESH_MS);
     });
   </script>
 </head>
@@ -165,31 +191,31 @@
   <div class="wrapper">
     <div class="counter">
       <i class="fas fa-stream fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Queue" data-speed="900">0</h2>
+      <h2 class="timer count-title count-number" data-status="Queue" data-speed="350">0</h2>
       <p class="count-text">Queue</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-tools fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="In Progress" data-speed="900">0</h2>
+      <h2 class="timer count-title count-number" data-status="In Progress" data-speed="350">0</h2>
       <p class="count-text">In Progress</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-exclamation-triangle fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Past Due" data-speed="900">0</h2>
+      <h2 class="timer count-title count-number" data-status="Past Due" data-speed="350">0</h2>
       <p class="count-text">Past Due</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-ban fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Blocked" data-speed="900">0</h2>
+      <h2 class="timer count-title count-number" data-status="Blocked" data-speed="350">0</h2>
       <p class="count-text">Blocked</p>
     </div>
 
     <div class="counter">
       <i class="fas fa-check-circle fa-2x"></i>
-      <h2 class="timer count-title count-number" data-status="Completed" data-speed="900">0</h2>
+      <h2 class="timer count-title count-number" data-status="Completed" data-speed="350">0</h2>
       <p class="count-text">Completed</p>
     </div>
   </div>
