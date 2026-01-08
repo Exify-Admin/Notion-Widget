@@ -30,50 +30,62 @@
 
   <script>
     // =========================
-    // Counter animation plugin
+    // Counter animation plugin (stable)
     // =========================
     (function ($) {
       $.fn.countTo = function (options) {
         options = options || {};
         return $(this).each(function () {
+          var $self = $(this);
+
+          // Kill any previous animation interval attached to this element
+          var existing = $self.data('countTo') || {};
+          if (existing.interval) clearInterval(existing.interval);
+
           var settings = $.extend({}, $.fn.countTo.defaults, {
-            from: $(this).data('from') ?? 0,
-            to: $(this).data('to') ?? 0,
-            speed: $(this).data('speed') ?? 1200,          // slower by default
-            refreshInterval: $(this).data('refresh-interval') ?? 50,
-            decimals: $(this).data('decimals') ?? 0
+            from: $self.data('from') ?? 0,
+            to: $self.data('to') ?? 0,
+            speed: $self.data('speed') ?? 1600,
+            refreshInterval: $self.data('refresh-interval') ?? 60,
+            decimals: $self.data('decimals') ?? 0
           }, options);
 
           var loops = Math.max(1, Math.ceil(settings.speed / settings.refreshInterval));
           var increment = (settings.to - settings.from) / loops;
 
-          var self = this,
-              $self = $(this),
-              loopCount = 0,
-              value = settings.from,
-              data = $self.data('countTo') || {};
+          var loopCount = 0;
+          var value = settings.from;
 
+          var data = { interval: null };
           $self.data('countTo', data);
-          if (data.interval) clearInterval(data.interval);
-          data.interval = setInterval(updateTimer, settings.refreshInterval);
+
+          // Mark as animating
+          $self.data('animating', true);
 
           render(value);
 
-          function updateTimer() {
+          data.interval = setInterval(function updateTimer() {
             value += increment;
             loopCount++;
             render(value);
 
             if (loopCount >= loops) {
-              $self.removeData('countTo');
               clearInterval(data.interval);
+              $self.removeData('countTo');
               value = settings.to;
               render(value);
-            }
-          }
 
-          function render(value) {
-            var formattedValue = settings.formatter.call(self, value, settings);
+              // Done animating
+              $self.data('animating', false);
+
+              if (typeof settings.onComplete === "function") {
+                settings.onComplete.call($self[0], value);
+              }
+            }
+          }, settings.refreshInterval);
+
+          function render(v) {
+            var formattedValue = settings.formatter.call($self[0], v, settings);
             $self.html(formattedValue);
           }
         });
@@ -82,31 +94,32 @@
       $.fn.countTo.defaults = {
         from: 0,
         to: 0,
-        speed: 1200,
-        refreshInterval: 50,
+        speed: 1600,
+        refreshInterval: 60,
         decimals: 0,
         formatter: function (value, settings) {
           return value.toFixed(settings.decimals);
-        }
+        },
+        onComplete: null
       };
     }(jQuery));
 
-    jQuery(async function ($) {
+    jQuery(function ($) {
       // =========================
       // CONFIG
       // =========================
       const API_URL = "https://notion-widget-woad.vercel.app/api/notion-counts?key=k7Qm3p9Lx2R8v5N";
 
-      // how often to check for changes
-      const REFRESH_MS = 5000; // 5 seconds
+      // Polling: slower = smoother + less chance of overlapping
+      const REFRESH_MS = 15000; // 15 seconds (recommended)
 
-      // Animation timing
-      const FIRST_LOAD_SPEED_MS = 1400; // slower count-up on initial load
-      const UPDATE_SPEED_MS     = 900;  // slightly faster on later changes
+      // Animation timing (slower + smoother)
+      const FIRST_LOAD_SPEED_MS = 2200;
+      const UPDATE_SPEED_MS     = 1600;
 
       const STATUS_ORDER = ["Queue", "In Progress", "Past Due", "Blocked", "Completed"];
 
-      // commas formatting
+      // Commas formatting
       $('.count-number').data('countToOptions', {
         formatter: function (value, options) {
           return value.toFixed(options.decimals).replace(/\B(?=(?:\d{3})+(?!\d))/g, ',');
@@ -114,6 +127,7 @@
       });
 
       let lastCounts = null;
+      let tickInFlight = false; // prevents overlapping API calls
 
       function setMeta(text, isError) {
         $("#meta").text(text).toggleClass("error", !!isError);
@@ -125,7 +139,7 @@
           const txt = await res.text().catch(() => "");
           throw new Error(`API failed (${res.status}): ${txt}`);
         }
-        return await res.json(); // { counts, total, updatedAt }
+        return await res.json();
       }
 
       function normalizeCounts(payload) {
@@ -136,47 +150,56 @@
         return counts;
       }
 
+      function animateEl($el, from, to, speedMs) {
+        // If already animating, skip this update (prevents twitchy restart)
+        if ($el.data("animating")) return;
+
+        $el.attr("data-from", from);
+        $el.attr("data-to", to);
+        $el.attr("data-speed", speedMs);
+
+        const options = $.extend({}, $el.data("countToOptions") || {});
+        $el.countTo(options);
+      }
+
       function animateAllFromZero(counts) {
         $(".timer[data-status]").each(function () {
-          const status = $(this).attr("data-status");
+          const $el = $(this);
+          const status = $el.attr("data-status");
           const next = Math.max(0, parseInt(counts[status] ?? 0, 10) || 0);
 
-          $(this).attr("data-from", 0);
-          $(this).attr("data-to", next);
-          $(this).attr("data-speed", FIRST_LOAD_SPEED_MS);
+          // ensure it's not flagged animating from some weird prior state
+          $el.data("animating", false);
 
-          const options = $.extend({}, $(this).data("countToOptions") || {});
-          $(this).countTo(options);
+          animateEl($el, 0, next, FIRST_LOAD_SPEED_MS);
         });
       }
 
       function animateOnlyChanged(counts) {
         $(".timer[data-status]").each(function () {
-          const status = $(this).attr("data-status");
+          const $el = $(this);
+          const status = $el.attr("data-status");
           const next = Math.max(0, parseInt(counts[status] ?? 0, 10) || 0);
           const prev = (lastCounts && lastCounts[status] !== undefined) ? lastCounts[status] : next;
 
           if (prev === next) return;
 
-          $(this).attr("data-from", prev);
-          $(this).attr("data-to", next);
-          $(this).attr("data-speed", UPDATE_SPEED_MS);
-
-          const options = $.extend({}, $(this).data("countToOptions") || {});
-          $(this).countTo(options);
+          // Animate from prev -> next (up OR down), but only if not mid-animation
+          animateEl($el, prev, next, UPDATE_SPEED_MS);
         });
       }
 
       async function tick() {
+        if (tickInFlight) return; // no overlap
+        tickInFlight = true;
+
         try {
           const payload = await fetchCountsPayload();
           const counts = normalizeCounts(payload);
 
           if (!lastCounts) {
-            // ✅ On page load / refresh: animate from 0
             animateAllFromZero(counts);
           } else {
-            // ✅ Later: animate only changed tiles (up or down)
             animateOnlyChanged(counts);
           }
 
@@ -187,10 +210,13 @@
         } catch (err) {
           console.error(err);
           setMeta("Failed to load counts. Check API URL / Vercel env vars.", true);
+        } finally {
+          tickInFlight = false;
         }
       }
 
-      await tick();
+      // Run once now, then poll
+      tick();
       setInterval(tick, REFRESH_MS);
     });
   </script>
